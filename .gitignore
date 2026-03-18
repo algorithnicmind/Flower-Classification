@@ -1,0 +1,13 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data and models
+model.tflite
+flower_photos/
+flower_photos.tar
+
+# OS generated files
+.DS_Store
+Thumbs.db
