@@ -34,8 +34,9 @@ def classify_local_image(image_path):
     img_array = tf.expand_dims(img_array, 0) # Create a batch
     
     # 3. Model Inference
-    input_details = interpreter.get_input_details()
-    input_name = input_details[0]['name']
+    # Get the input name from the signature list to ensure compatibility
+    signature_list = interpreter.get_signature_list()
+    input_name = list(signature_list['serving_default']['inputs'].keys())[0]
     
     predictions_lite_dict = classify_lite(**{input_name: img_array})
     predictions_lite = list(predictions_lite_dict.values())[0]
