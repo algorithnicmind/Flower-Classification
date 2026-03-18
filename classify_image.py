@@ -36,7 +36,7 @@ def classify_local_image(image_path):
     # 3. Model Inference
     # Get the input name from the signature list to ensure compatibility
     signature_list = interpreter.get_signature_list()
-    input_name = list(signature_list['serving_default']['inputs'].keys())[0]
+    input_name = signature_list['serving_default']['inputs'][0]
     
     predictions_lite_dict = classify_lite(**{input_name: img_array})
     predictions_lite = list(predictions_lite_dict.values())[0]
