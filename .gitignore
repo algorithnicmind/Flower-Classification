@@ -5,9 +5,15 @@ __pycache__/
 
 # Data and models
 model.tflite
+classes.txt
+training_data/
+user_uploads/
 flower_photos/
 flower_photos.tar
 
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Virtual environment
+.venv/
