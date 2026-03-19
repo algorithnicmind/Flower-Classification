@@ -5,6 +5,7 @@ __pycache__/
 
 # Data and models
 model.tflite
+model.keras
 classes.txt
 training_data/
 user_uploads/

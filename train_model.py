@@ -14,12 +14,14 @@ BATCH_SIZE = 32
 IMG_HEIGHT = 180
 IMG_WIDTH = 180
 EPOCHS = 15
+FINE_TUNE_EPOCHS = 3  # Epochs for learning from a single new image
 
 # Paths
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 TRAINING_DATA_DIR = os.path.join(PROJECT_DIR, "training_data")
 USER_UPLOADS_DIR = os.path.join(PROJECT_DIR, "user_uploads")
 MODEL_PATH = os.path.join(PROJECT_DIR, "model.tflite")
+KERAS_MODEL_PATH = os.path.join(PROJECT_DIR, "model.keras")
 CLASSES_PATH = os.path.join(PROJECT_DIR, "classes.txt")
 
 
@@ -58,42 +60,8 @@ def setup_training_data():
     return TRAINING_DATA_DIR
 
 
-def merge_user_uploads():
-    """Copy any user-uploaded images into the training_data folder."""
-    
-    if not os.path.exists(USER_UPLOADS_DIR):
-        print("No user uploads found. Skipping merge.")
-        return 0
-    
-    new_images_count = 0
-    for class_folder in os.listdir(USER_UPLOADS_DIR):
-        src_folder = os.path.join(USER_UPLOADS_DIR, class_folder)
-        dst_folder = os.path.join(TRAINING_DATA_DIR, class_folder)
-        
-        if not os.path.isdir(src_folder):
-            continue
-        
-        # Create destination folder if it doesn't exist
-        os.makedirs(dst_folder, exist_ok=True)
-        
-        for img_file in os.listdir(src_folder):
-            src_path = os.path.join(src_folder, img_file)
-            dst_path = os.path.join(dst_folder, img_file)
-            
-            if not os.path.exists(dst_path):
-                shutil.copy2(src_path, dst_path)
-                new_images_count += 1
-    
-    if new_images_count > 0:
-        print(f"Merged {new_images_count} new user-uploaded images into training data.")
-    else:
-        print("No new user uploads to merge.")
-    
-    return new_images_count
-
-
 def train(data_dir):
-    """Train the model on the given data directory."""
+    """Full training of the model on the entire dataset (run only once)."""
     
     data_path = pathlib.Path(data_dir)
     image_count = len(list(data_path.glob('*/*.jpg')))
@@ -166,14 +134,18 @@ def train(data_dir):
         epochs=EPOCHS
     )
 
-    # Convert and Save the Model
+    # Save the full Keras model (needed for fine-tuning later)
+    model.save(KERAS_MODEL_PATH)
+    print(f"Keras model saved to {KERAS_MODEL_PATH}")
+
+    # Convert and Save the TFLite model
     print("\nConverting model to TFLite...")
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     tflite_model = converter.convert()
 
     with open(MODEL_PATH, 'wb') as f:
         f.write(tflite_model)
-    print(f"Model saved to {MODEL_PATH}")
+    print(f"TFLite model saved to {MODEL_PATH}")
 
     # Save class names
     with open(CLASSES_PATH, 'w') as f:
@@ -183,14 +155,72 @@ def train(data_dir):
     return history
 
 
+def fine_tune_on_new_image(image_path, class_name):
+    """
+    Fine-tune the EXISTING model on ONLY the new image.
+    This does NOT re-train on old images. It only teaches
+    the brain the new image.
+    """
+    
+    print(f"\n🧠 Fine-tuning the AI on your new image only...")
+    print(f"   Image: {image_path}")
+    print(f"   Class: {class_name}")
+    
+    # 1. Load the existing Keras model (the full brain)
+    if not os.path.exists(KERAS_MODEL_PATH):
+        print("❌ Keras model not found. Please run 'python train_model.py' first.")
+        return
+    
+    model = keras.models.load_model(KERAS_MODEL_PATH)
+    
+    # 2. Load class names to find the class index
+    with open(CLASSES_PATH, 'r') as f:
+        class_names = f.read().splitlines()
+    
+    class_index = class_names.index(class_name)
+    
+    # 3. Prepare ONLY the new image as training data
+    img = tf.keras.utils.load_img(image_path, target_size=(IMG_HEIGHT, IMG_WIDTH))
+    img_array = tf.keras.utils.img_to_array(img)
+    
+    # Create a small batch with just this one image
+    img_batch = tf.expand_dims(img_array, 0)        # Shape: (1, 180, 180, 3)
+    label_batch = tf.constant([class_index])          # Shape: (1,)
+    
+    # Create a dataset from just this image
+    new_ds = tf.data.Dataset.from_tensor_slices((img_batch, label_batch))
+    new_ds = new_ds.batch(1)
+    
+    # 4. Fine-tune with a LOW learning rate (so it doesn't forget old knowledge)
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
+        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+        metrics=['accuracy']
+    )
+    
+    print(f"   Training on new image for {FINE_TUNE_EPOCHS} epochs...")
+    model.fit(new_ds, epochs=FINE_TUNE_EPOCHS, verbose=1)
+    
+    # 5. Save the updated Keras model
+    model.save(KERAS_MODEL_PATH)
+    print(f"   ✅ Updated Keras model saved.")
+    
+    # 6. Convert and save updated TFLite model
+    converter = tf.lite.TFLiteConverter.from_keras_model(model)
+    tflite_model = converter.convert()
+    
+    with open(MODEL_PATH, 'wb') as f:
+        f.write(tflite_model)
+    print(f"   ✅ Updated TFLite model saved.")
+    
+    print(f"\n🎉 AI has learned from your new image! Brain updated.")
+
+
 def main():
     # 1. Set up training data (download if first time)
     setup_training_data()
     
-    # 2. Merge any user uploads into training data
-    merge_user_uploads()
-    
-    # 3. Train the model
+    # 2. Train the model (full training)
     train(TRAINING_DATA_DIR)
     
     print("\n✅ Training complete! Model is ready.")

@@ -80,28 +80,6 @@ def save_to_uploads(image_path, predicted_class):
     return dest_path
 
 
-def retrain_model():
-    """Automatically re-train the model with the new data."""
-    
-    print("\n🔄 Starting automatic re-training with new data...")
-    print("=" * 50)
-    
-    # Import and run the training function
-    from train_model import setup_training_data, merge_user_uploads, train, TRAINING_DATA_DIR
-    
-    # Step 1: Make sure base training data exists
-    setup_training_data()
-    
-    # Step 2: Merge user uploads into training data
-    new_count = merge_user_uploads()
-    
-    # Step 3: Re-train the model
-    train(TRAINING_DATA_DIR)
-    
-    print("\n✅ Re-training complete! The AI is now smarter with your new image!")
-    print("=" * 50)
-
-
 def download_sunflower():
     """Helper to download a test image."""
     sunflower_url = "https://storage.googleapis.com/download.tensorflow.org/example_images/592px-Red_sunflower.jpg"
@@ -123,7 +101,7 @@ def main():
         print(f"❌ Image file not found: {image_path}")
         return
     
-    # Step 1 & 2: Classify the image
+    # Step 1: Classify the image
     result = classify_image(image_path)
     
     if result is None:
@@ -131,11 +109,12 @@ def main():
     
     predicted_class, confidence = result
     
-    # Step 3: Save the image to user_uploads folder
-    save_to_uploads(image_path, predicted_class)
+    # Step 2: Save the image to user_uploads folder
+    saved_path = save_to_uploads(image_path, predicted_class)
     
-    # Step 4: Automatically re-train the model
-    retrain_model()
+    # Step 3: Fine-tune ONLY on this new image (not on old images)
+    from train_model import fine_tune_on_new_image
+    fine_tune_on_new_image(saved_path, predicted_class)
 
 
 if __name__ == "__main__":
